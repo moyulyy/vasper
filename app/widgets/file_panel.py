@@ -1,4 +1,4 @@
-"""左侧可折叠文件管理器：懒加载目录树、搜索、右键菜单、上传与预览。"""
+"""左侧可折叠文件管理器：懒加载目录树、搜索、右键菜单、拖拽上传与预览。"""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 from PyQt6.QtCore import QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QAction, QFont
 from PyQt6.QtWidgets import (
-    QAbstractItemView, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMenu,
+    QAbstractItemView, QHBoxLayout, QLabel, QLineEdit, QMenu,
     QPlainTextEdit, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout,
     QWidget,
 )
@@ -142,11 +142,9 @@ class FilePanel(Card):
         self._new_folder_button.clicked.connect(self._new_folder)
         self._collapse_button = IconButton("chevrons-down-up", "折叠所有目录", diameter=28, icon_size=15)
         self._collapse_button.clicked.connect(self._collapse_all)
-        self._upload_button = IconButton("upload", "上传文件", diameter=28, icon_size=15)
-        self._upload_button.clicked.connect(self._upload)
         self._refresh_button = IconButton("refresh", "刷新", diameter=28, icon_size=15)
         self._refresh_button.clicked.connect(self.refresh)
-        for button in (self._collapse_button, self._new_folder_button, self._upload_button, self._refresh_button):
+        for button in (self._collapse_button, self._new_folder_button, self._refresh_button):
             header.addWidget(button)
         layout.addLayout(header)
 
@@ -361,12 +359,6 @@ class FilePanel(Card):
         self.notify.emit(f"已创建 {entry['name']}", "success")
         self.refresh()
 
-    def _upload(self) -> None:
-        paths, _ = QFileDialog.getOpenFileNames(self, "上传到工作区")
-        if not paths:
-            return
-        self._copy_files(paths, self._current_folder())
-
     def _current_folder(self) -> str:
         item = self._tree.currentItem()
         while item is not None and item.data(0, TYPE_ROLE) != "dir":
@@ -513,7 +505,7 @@ class FilePanel(Card):
     def apply_theme(self) -> None:
         self._search_action.setIcon(icons.icon("search", theme.current().muted, 15))
         self._apply_branch_style()
-        for button in (self._new_folder_button, self._upload_button, self._refresh_button):
+        for button in (self._new_folder_button, self._refresh_button):
             button.update()
         root = self._tree.invisibleRootItem()
 

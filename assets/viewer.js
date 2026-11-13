@@ -11,6 +11,7 @@
     measure: false,
     hasCell: false,
     points: [],
+    selection: [],
     mirrorCount: 0,
     savedView: null,
     theme: 'dark',
@@ -46,6 +47,19 @@
   };
 
   const BOUNDARY_TOL = 0.02;
+  const PBC_SHELL_MARGIN = 0.55;
+  const SELECT_COLOR = '#FFB020';
+  const VDW_RADII = {
+    H: 1.2, He: 1.4, Li: 1.82, Be: 1.53, B: 1.92, C: 1.7, N: 1.55, O: 1.52,
+    F: 1.47, Ne: 1.54, Na: 2.27, Mg: 1.73, Al: 1.84, Si: 2.1, P: 1.8, S: 1.8,
+    Cl: 1.75, Ar: 1.88, K: 2.75, Ca: 2.31, Sc: 2.3, Ti: 2.15, V: 2.05, Cr: 2.05,
+    Mn: 2.05, Fe: 2.0, Co: 2.0, Ni: 1.97, Cu: 1.96, Zn: 2.01, Ga: 1.87, Ge: 2.11,
+    As: 1.85, Se: 1.9, Br: 1.85, Kr: 2.02, Rb: 3.03, Sr: 2.49, Y: 2.4, Zr: 2.3,
+    Nb: 2.15, Mo: 2.1, Tc: 2.05, Ru: 2.05, Rh: 2.0, Pd: 2.05, Ag: 2.1, Cd: 2.2,
+    In: 2.2, Sn: 2.25, Sb: 2.2, Te: 2.06, I: 1.98, Xe: 2.16, Cs: 3.43, Ba: 2.68,
+    La: 2.5, Ce: 2.48, Hf: 2.25, Ta: 2.2, W: 2.1, Re: 2.05, Os: 2.0, Ir: 2.0,
+    Pt: 2.05, Au: 2.1, Hg: 2.05, Tl: 1.96, Pb: 2.02, Bi: 2.07,
+  };
 
   const COVALENT_RADII = {
     H: 0.31, He: 0.28, Li: 1.28, Be: 0.96, B: 0.84, C: 0.76, N: 0.71, O: 0.66,
@@ -179,6 +193,8 @@
 
     const addImage = (frac, elem) => {
       if (atoms.length >= 700) return -1;
+      // 只保留紧贴晶胞的一层镜像，避免在负轴/正轴远处生成无意义原子。
+      if (!frac.every((v) => v >= -PBC_SHELL_MARGIN && v <= 1 + PBC_SHELL_MARGIN)) return -1;
       const cart = apply3(matrix, frac);
       const key = atomKey(elem, cart);
       if (keys.has(key)) return keys.get(key);
@@ -247,14 +263,24 @@
           }
         }
         if (!best) continue;
-        addImage(
-          [fracs[j][0] + best.nx, fracs[j][1] + best.ny, fracs[j][2] + best.nz],
-          aj.elem
+        const candidates = [
+          {
+            frac: [fracs[j][0] + best.nx, fracs[j][1] + best.ny, fracs[j][2] + best.nz],
+            elem: aj.elem,
+          },
+          {
+            frac: [fracs[i][0] - best.nx, fracs[i][1] - best.ny, fracs[i][2] - best.nz],
+            elem: ai.elem,
+          },
+        ].filter((candidate) =>
+          candidate.frac.every((v) => v >= -PBC_SHELL_MARGIN && v <= 1 + PBC_SHELL_MARGIN)
         );
-        addImage(
-          [fracs[i][0] - best.nx, fracs[i][1] - best.ny, fracs[i][2] - best.nz],
-          ai.elem
+        if (!candidates.length) continue;
+        // 同一根周期键只向“正方向”补一个镜像，避免负轴远处出现多余原子。
+        candidates.sort((a, b) =>
+          (b.frac[0] + b.frac[1] + b.frac[2]) - (a.frac[0] + a.frac[1] + a.frac[2])
         );
+        addImage(candidates[0].frac, candidates[0].elem);
       }
     }
 
@@ -350,6 +376,26 @@
     return distance;
   }
 
+  function selectionRadius(atom) {
+    const vdw = VDW_RADII[atom.elem] || (COVALENT_RADII[atom.elem] || 0.77) * 1.6;
+    return vdw * 0.30 * 1.28;
+  }
+
+  function drawSelection() {
+    if (!state.selection || !state.selection.length) return;
+    for (const atom of state.selection) {
+      try {
+        state.viewer.addSphere({
+          center: { x: atom.x, y: atom.y, z: atom.z },
+          radius: selectionRadius(atom),
+          color: SELECT_COLOR,
+          wireframe: true,
+          opacity: 1.0,
+        });
+      } catch (err) { /* 忽略选中高亮绘制异常 */ }
+    }
+  }
+
   function drawLabels() {
     if (!state.showLabels || !state.model) return;
     const atoms = state.model.selectedAtoms({}).filter((atom) => !atom.mirror);
@@ -389,6 +435,7 @@
     }
     drawMeasure();
     drawLabels();
+    drawSelection();
     viewer.render();
   }
 
@@ -476,10 +523,11 @@
   }
 
   function onClick(atom) {
-    if (!atom || atom.mirror) return;
+    if (!atom) return;
     if (state.measure) {
       if (state.points.length >= 2) state.points = [];
-      state.points.push({ x: atom.x, y: atom.y, z: atom.z, elem: atom.elem });
+      state.points.push({ x: atom.x, y: atom.y, z: atom.z, elem: atom.elem, mirror: !!atom.mirror });
+      state.selection = state.points.slice();
       let distance;
       if (state.points.length === 2) {
         const [a, b] = state.points;
@@ -490,6 +538,10 @@
       updatePick(atom, distance);
       return;
     }
+    state.selection = [{
+      x: atom.x, y: atom.y, z: atom.z, elem: atom.elem, mirror: !!atom.mirror,
+    }];
+    render();
     updatePick(atom);
     notify('pick', {
       element: atom.elem || 'X',
@@ -532,10 +584,8 @@
         viewer.removeAllShapes();
         viewer.removeAllLabels();
         state.points = [];
+        state.selection = [];
         state.model = viewer.addModel(payload.content, payload.format || 'cif');
-        // 必须在模型加载之后设置 clickable，否则 3Dmol 找不到原子，
-        // 点击拾取 / 测距会完全失效。
-        viewer.setClickable({}, true, onClick);
         state.style = 'ballstick';
         state.hasCell = !!payload.hasCell;
         state.showCell = !!payload.hasCell;
@@ -546,6 +596,8 @@
         } else {
           ensureBonds();
         }
+        // 镜像原子也加入之后才能一起设置为可点击，保证镜像原子可测距。
+        viewer.setClickable({}, true, onClick);
         state.atomCount = payload.atoms || 0;
         state.name = payload.name || '';
         $('pick').classList.remove('show');
@@ -584,6 +636,7 @@
     setMeasure(on) {
       state.measure = !!on;
       state.points = [];
+      state.selection = [];
       updatePick(null);
       render();
     },
@@ -631,6 +684,7 @@
       state.viewer.removeAllLabels();
       state.model = null;
       state.points = [];
+      state.selection = [];
       state.atomCount = 0;
       state.mirrorCount = 0;
       state.name = '';
@@ -647,8 +701,15 @@
       const atoms = state.model.selectedAtoms({});
       return JSON.stringify(atoms.slice(0, 24).map((atom, index) => {
         const point = state.viewer.modelToScreen(atom);
-        return { index, elem: atom.elem, x: point.x, y: point.y };
+        return { index, elem: atom.elem, x: point.x, y: point.y, mirror: !!atom.mirror };
       }));
+    },
+
+    debugMirrors() {
+      if (!state.model) return '[]';
+      return JSON.stringify(state.model.atoms
+        .filter((atom) => atom.mirror)
+        .map((atom) => ({ elem: atom.elem, x: atom.x, y: atom.y, z: atom.z })));
     },
 
     debugState() {
@@ -662,6 +723,7 @@
         labels: state.showLabels,
         measure: state.measure,
         points: state.points.length,
+        selection: state.selection ? state.selection.length : 0,
         pbc: state.mirrorCount || 0,
         theme: state.theme,
         name: state.name,
