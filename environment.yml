@@ -1,0 +1,10 @@
+name: vasper
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - PyQt6>=6.6
+      - PyQt6-WebEngine>=6.6
+      - openai>=1.0

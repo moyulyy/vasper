@@ -1,0 +1,27 @@
+# 本地环境（1.2 GB，不入库）
+.conda/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 运行时数据：包含会话、API Key、节点密码等
+data/
+
+# 工具/IDE
+.reasonix/
+.idea/
+.vscode/
+*.log
+.DS_Store
+
+# 推送凭据（临时）
+.github-token
+
+# 临时预览
+.preview*.png
+.icon_*.png
+.icons_sheet.png
+.mol_*.png
+.panel_only.png
+.window2.png
