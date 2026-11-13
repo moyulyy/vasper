@@ -78,7 +78,7 @@ Vasper 把这些环节放进一个本地窗口：
   <img src="assets/screenshot-settings.png" alt="Vasper 设置 - 计算节点" width="88%">
 </p>
 
-设置分为 **模型服务 / 计算节点 / 工作区 / 关于** 四页，计算节点页支持多节点、SSH 参数和 TCP 连接测试。
+设置分为 **模型服务 / 计算节点 / 子智能体 / 工作区 / 关于** 五页；计算节点页支持多节点与 TCP 测试，子智能体页按文件夹展示 skills / mcp / tools / data。
 
 ---
 
@@ -114,10 +114,38 @@ Vasper 把这些环节放进一个本地窗口：
 - 每条助手消息标记当时使用的模式（计划 / 执行）。
 
 ### 设置
-- **模型服务**：Base URL、API Key、模型、温度；可导入同机 sci-circle 的 `[llm_api]` 配置。
+- **模型服务**：Base URL、API Key、模型；默认模型 `deepseek-flash`，不设置温度。可导入同机 sci-circle 的 `[llm_api]` 配置。
 - **计算节点**：多节点 SSH 配置（主机、端口、用户名、密码 / 私钥、远程目录、调度器、分区、提交命令），支持 TCP 端口测试。
+- **子智能体**：每个子智能体是 `data/agents/<id>/` 下的独立文件夹，按 `skills / mcp / tools / data` 分类陈列技能与工具清单。
 - **工作区**：切换结构文件根目录。
 - **关于**：版本、技术栈、数据目录与安全说明。
+
+### 内置子智能体
+
+| 子智能体 | 目录 | 能力清单 |
+| --- | --- | --- |
+| 文件操作 | `file-ops/` | 文本文件增删改查、路径创建、复制/移动 |
+| 编程助手 | `coding/` | 写入/修改代码、补丁、运行与测试 |
+| SSH 连接 | `ssh/` | 节点连通性测试、远端命令、上传/下载 |
+| SFTP 传输 | `sftp/` | 上传、下载、列目录、创建目录、删除远端文件 |
+| Slurm 作业 | `slurm/` | 提交、查询、取消、队列与日志 |
+
+每个目录结构：
+
+```text
+data/agents/<id>/
+├── agent.json        # 名称、描述、system prompt、工具清单
+├── skills/           # 技能说明（Markdown）
+├── mcp/              # MCP 服务配置（servers.json）
+├── tools/            # 工具清单与参数说明（tools.json）
+└── data/             # 该子智能体的专属数据
+```
+
+<p align="center">
+  <img src="assets/screenshot-subagents.png" alt="Vasper 设置 - 子智能体" width="88%">
+</p>
+
+> 当前版本负责子智能体目录、技能与工具清单的管理和展示；SSH / SFTP / Slurm 执行器尚未接入对话自动调用。可在设置中新建自定义子智能体。
 
 ### 桌面体验
 - 无边框圆角窗口 + 柔和阴影，自绘最小化 / 最大化 / 关闭按钮。
@@ -172,8 +200,7 @@ python main.py
 | --- | --- |
 | API Base URL | 任意 OpenAI 兼容地址；留空则使用官方地址 |
 | API Key | 仅保存在本机 `data/settings.json` |
-| 模型名称 | 例如 `kimi-k3`、`gpt-4o`、`deepseek-chat` |
-| 温度 | 0.0 – 2.0 |
+| 模型名称 | 默认 `deepseek-flash`，可填写任意 OpenAI 兼容模型 |
 
 也支持环境变量作为初始配置：
 
@@ -271,7 +298,7 @@ Vasper 的 3D 视图针对晶体结构做了 Materials Studio 风格的周期显
 │                   ↕ QWebChannel                                      │
 │                   viewer.html + viewer.js + 3Dmol (WebGL)             │
 │                                                                       │
-│  SettingsDialog（模型服务 / 计算节点 / 工作区 / 关于）                  │
+│  SettingsDialog（模型服务 / 计算节点 / 子智能体 / 工作区 / 关于）        │
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -290,6 +317,7 @@ vasper/
 ├── requirements.txt
 ├── app/
 │   ├── config.py            # 设置、工作区、LLM / 节点配置
+│   ├── subagents.py         # 子智能体目录、技能与工具清单
 │   ├── files.py             # 工作区文件操作
 │   ├── structures.py        # 结构解析 / POSCAR→CIF
 │   ├── sessions.py          # 会话持久化
@@ -345,6 +373,8 @@ vasper/
 - [x] LLM 计划 / 执行双模式
 - [x] 多节点 SSH 配置与端口测试
 - [x] 无边框圆角桌面窗口
+- [x] 子智能体目录（skills / mcp / tools / data）
+- [ ] 子智能体工具执行器（SSH / SFTP / Slurm）
 - [ ] 根据自然语言生成 VASP 输入文件
 - [ ] 可视化编辑结构（增删原子 / 替换元素）
 - [ ] 通过 SSH 提交作业并回传状态

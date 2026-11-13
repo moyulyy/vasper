@@ -18,11 +18,12 @@ from PyQt6.QtWidgets import QApplication
 # QtWebEngine 需要在创建 QApplication 前设置共享 OpenGL 上下文。
 QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True)
 
-from app import config, icons, theme  # noqa: E402
+from app import config, icons, subagents, theme  # noqa: E402
 from app.widgets.main_window import MainWindow  # noqa: E402
 
 # 首次运行：确保数据目录与工作区存在。
 config.ensure_dirs()
+subagents.ensure_builtins()
 
 
 def _prepare_webengine() -> None:

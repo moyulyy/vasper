@@ -436,6 +436,37 @@ QListWidget#NodeList::item:selected {
     background: %(accent_soft)s;
     color: %(accent)s;
 }
+QListWidget#AgentList {
+    background: %(surface_alt)s;
+    border: 1px solid %(border)s;
+    border-radius: 12px;
+    padding: 6px;
+}
+QListWidget#AgentList::item {
+    height: 52px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    color: %(muted)s;
+    font-size: 11px;
+}
+QListWidget#AgentList::item:selected {
+    background: %(accent_soft)s;
+    color: %(accent)s;
+}
+QTreeWidget#AgentTree {
+    background: %(surface_alt)s;
+    border: 1px solid %(border)s;
+    border-radius: 12px;
+    padding: 6px;
+}
+QTreeWidget#AgentTree::item {
+    height: 27px;
+    border-radius: 6px;
+    color: %(text_soft)s;
+    font-size: 11.5px;
+}
+QTreeWidget#AgentTree::item:hover { background: %(surface_sunken)s; }
+QTreeWidget#AgentTree::item:selected { background: %(accent_soft)s; color: %(accent)s; }
 
 QMenu {
     background: %(surface)s;

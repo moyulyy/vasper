@@ -36,8 +36,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "llm": {
         "base_url": "",
         "api_key": "",
-        "model": "kimi-k3",
-        "temperature": 0.4,
+        "model": "deepseek-flash",
     },
     "appearance": {"theme": "dark"},
     "ui": {"files_open": False, "sessions_open": False, "llm_mode": "plan"},
@@ -88,7 +87,6 @@ def _seed_llm() -> dict[str, Any]:
         if imported:
             seed["base_url"] = seed["base_url"] or imported.get("base_url", "")
             seed["api_key"] = imported.get("api_key", "") or seed["api_key"]
-            seed["model"] = imported.get("model") or seed["model"]
     return seed
 
 
@@ -131,11 +129,8 @@ def load_settings() -> dict[str, Any]:
         llm = settings.get("llm") or {}
         llm["base_url"] = str(llm.get("base_url") or "").strip()
         llm["api_key"] = str(llm.get("api_key") or "").strip()
-        llm["model"] = str(llm.get("model") or "kimi-k3").strip()
-        try:
-            llm["temperature"] = max(0.0, min(2.0, float(llm.get("temperature", 0.4))))
-        except (TypeError, ValueError):
-            llm["temperature"] = 0.4
+        llm["model"] = str(llm.get("model") or "deepseek-flash").strip()
+        llm.pop("temperature", None)
         settings["llm"] = llm
         return settings
 
@@ -166,7 +161,6 @@ def public_settings() -> dict[str, Any]:
         "llm": {
             "base_url": llm.get("base_url", ""),
             "model": llm.get("model", ""),
-            "temperature": llm.get("temperature", 0.4),
             "has_api_key": bool(key),
             "api_key_hint": ("…" + key[-4:]) if len(key) >= 4 else ("已设置" if key else ""),
         },
@@ -192,11 +186,6 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
                 current["api_key"] = llm["api_key"].strip()
             if llm.get("clear_api_key") is True:
                 current["api_key"] = ""
-            if "temperature" in llm:
-                try:
-                    current["temperature"] = max(0.0, min(2.0, float(llm["temperature"])))
-                except (TypeError, ValueError):
-                    pass
 
         appearance = payload.get("appearance")
         if isinstance(appearance, dict):

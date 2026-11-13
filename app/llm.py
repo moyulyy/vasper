@@ -43,7 +43,7 @@ def _local_fallback(prompt: str) -> Iterator[str]:
         "请点击右上角的 **设置**（齿轮图标），填写：\n\n"
         "1. **API Base URL**：例如 `https://api.moonshot.cn/v1`\n"
         "2. **API Key**\n"
-        "3. **模型名称**：例如 `kimi-k3`\n\n"
+        "3. **模型名称**：例如 `deepseek-flash`\n\n"
         "保存后即可开始流式对话。你也可以在设置中一键导入本机 sci-circle 的 LLM 配置。\n\n"
         f"你刚才问的是：**{prompt[:120]}**"
     )
@@ -59,8 +59,7 @@ def iter_chat(
     settings = config.llm_config()
     api_key = settings.get("api_key") or ""
     base_url = settings.get("base_url") or None
-    model = settings.get("model") or "kimi-k3"
-    temperature = settings.get("temperature", 0.4)
+    model = settings.get("model") or "deepseek-flash"
 
     messages: list[dict[str, Any]] = []
     system_prompt = payload.get("system") or DEFAULT_SYSTEM_PROMPT
@@ -114,7 +113,6 @@ def iter_chat(
         stream = client.chat.completions.create(
             model=model,
             messages=messages,
-            temperature=temperature,
             stream=True,
         )
         usage = None

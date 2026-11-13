@@ -4,18 +4,19 @@ from __future__ import annotations
 
 import copy
 import socket
+from pathlib import Path
 
-from PyQt6.QtCore import QSize, Qt, QThread, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont, QGuiApplication, QIntValidator
+from PyQt6.QtCore import QSize, Qt, QThread, QTimer, QUrl, pyqtSignal
+from PyQt6.QtGui import QDesktopServices, QFont, QGuiApplication, QIntValidator
 from PyQt6.QtWidgets import (
     QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
-    QListWidget, QListWidgetItem, QPushButton, QScrollArea, QSlider,
-    QStackedWidget, QVBoxLayout, QWidget,
+    QListWidget, QListWidgetItem, QPushButton, QScrollArea, QStackedWidget,
+    QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
-from .. import __version__, config, icons
+from .. import __version__, config, icons, subagents
 from .components import Divider, IconButton, TextButton
-from .sheets import SheetDialog
+from .sheets import ConfirmSheet, InputSheet, SheetDialog
 
 
 class ConnectionTester(QThread):
@@ -38,7 +39,7 @@ class SettingsDialog(SheetDialog):
     settings_saved = pyqtSignal(dict)
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent, "设置", "模型服务、计算节点与工作区", icon="settings", width=780)
+        super().__init__(parent, "设置", "模型服务、计算节点、子智能体与工作区", icon="settings", width=780)
         screen = (parent.window().screen() if parent is not None else None) or QGuiApplication.primaryScreen()
         available = screen.availableGeometry().height() if screen is not None else 900
         self.setFixedHeight(min(720, max(560, available - 70)))
@@ -62,6 +63,7 @@ class SettingsDialog(SheetDialog):
         for label, icon_name in (
             ("模型服务", "settings"),
             ("计算节点", "flask"),
+            ("子智能体", "layers"),
             ("工作区", "folder"),
             ("关于", "info"),
         ):
@@ -73,6 +75,7 @@ class SettingsDialog(SheetDialog):
         self._stack = QStackedWidget()
         self._stack.addWidget(self._scroll_page(self._build_llm_page(public)))
         self._stack.addWidget(self._scroll_page(self._build_compute_page()))
+        self._stack.addWidget(self._scroll_page(self._build_subagents_page()))
         self._stack.addWidget(self._scroll_page(self._build_workspace_page(public)))
         self._stack.addWidget(self._scroll_page(self._build_about_page(public)))
         content.addWidget(self._nav)
@@ -169,27 +172,8 @@ class SettingsDialog(SheetDialog):
 
         model_layout.addWidget(self._field_label("模型名称"))
         self._model = QLineEdit(public["llm"]["model"])
-        self._model.setPlaceholderText("例如 kimi-k3 / gpt-4o / deepseek-chat")
+        self._model.setPlaceholderText("默认 deepseek-flash")
         model_layout.addWidget(self._model)
-
-        temp_row = QHBoxLayout()
-        temp_row.setSpacing(10)
-        temp_row.addWidget(self._field_label("温度"))
-        self._temperature = QSlider(Qt.Orientation.Horizontal)
-        self._temperature.setRange(0, 20)
-        self._temperature.setValue(int(round(float(public["llm"]["temperature"]) * 10)))
-        self._temperature.setPageStep(2)
-        self._temperature.setMinimumWidth(300)
-        temp_row.addWidget(self._temperature, 1)
-        self._temperature_value = QLabel(f"{public['llm']['temperature']:.1f}")
-        self._temperature_value.setObjectName("Muted")
-        self._temperature_value.setMinimumWidth(28)
-        self._temperature_value.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        temp_row.addWidget(self._temperature_value)
-        self._temperature.valueChanged.connect(
-            lambda value: self._temperature_value.setText(f"{value / 10:.1f}")
-        )
-        model_layout.addLayout(temp_row)
 
         hint_row = QHBoxLayout()
         self._llm_status = QLabel("")
@@ -306,6 +290,188 @@ class SettingsDialog(SheetDialog):
         body.addWidget(form_box, 1)
         layout.addLayout(body, 1)
         return page
+
+    def _build_subagents_page(self) -> QWidget:
+        page, layout = self._page()
+        layout.addWidget(self._section("子智能体"))
+        info = QLabel(
+            "每个子智能体是 data/agents/ 下的独立文件夹，内含 skills / mcp / tools / data 四类目录。"
+            "当前版本管理目录与工具清单，远程执行器可在后续接入。"
+        )
+        info.setObjectName("Faint")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        body = QHBoxLayout()
+        body.setSpacing(12)
+        left = QVBoxLayout()
+        left.setSpacing(6)
+        self._agent_list = QListWidget()
+        self._agent_list.setObjectName("AgentList")
+        self._agent_list.setFrameShape(QFrame.Shape.NoFrame)
+        self._agent_list.setFixedWidth(204)
+        self._agent_list.currentRowChanged.connect(self._load_agent)
+        left.addWidget(self._agent_list, 1)
+        add_button = TextButton("新建子智能体", variant="chip", icon_name="plus")
+        add_button.clicked.connect(self._add_subagent)
+        left.addWidget(add_button)
+        delete_button = TextButton("删除", variant="ghost", icon_name="trash")
+        delete_button.clicked.connect(self._delete_subagent)
+        left.addWidget(delete_button)
+        body.addLayout(left)
+
+        right = QVBoxLayout()
+        right.setSpacing(6)
+        self._agent_title = QLabel("选择一个子智能体")
+        self._agent_title.setObjectName("Title")
+        right.addWidget(self._agent_title)
+        self._agent_desc = QLabel("")
+        self._agent_desc.setObjectName("Muted")
+        self._agent_desc.setWordWrap(True)
+        right.addWidget(self._agent_desc)
+        self._agent_path = QLabel("")
+        self._agent_path.setObjectName("Faint")
+        self._agent_path.setWordWrap(True)
+        right.addWidget(self._agent_path)
+        self._agent_tree = QTreeWidget()
+        self._agent_tree.setObjectName("AgentTree")
+        self._agent_tree.setHeaderHidden(True)
+        self._agent_tree.setIndentation(16)
+        self._agent_tree.setMinimumHeight(280)
+        self._agent_tree.setFrameShape(QFrame.Shape.NoFrame)
+        right.addWidget(self._agent_tree, 1)
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        self._open_agent_button = TextButton("打开目录", variant="ghost", icon_name="folder")
+        self._open_agent_button.clicked.connect(self._open_subagent_dir)
+        row.addWidget(self._open_agent_button)
+        self._agent_status = QLabel("")
+        self._agent_status.setObjectName("Faint")
+        self._agent_status.setWordWrap(True)
+        row.addWidget(self._agent_status, 1)
+        right.addLayout(row)
+        body.addLayout(right, 1)
+        layout.addLayout(body, 1)
+
+        self._agents: list[dict] = []
+        self._current_agent_id = ""
+        self._refresh_agents()
+        return page
+
+    def _human_size(self, size: int) -> str:
+        value = float(size or 0)
+        for unit in ("B", "KB", "MB"):
+            if value < 1024 or unit == "MB":
+                return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+            value /= 1024
+        return ""
+
+    def _refresh_agents(self, select_id: str | None = None) -> None:
+        try:
+            self._agents = subagents.list_agents()
+        except Exception as exc:
+            self._agents = []
+            self._agent_status.setText(f"读取子智能体失败：{exc}")
+        self._agent_list.blockSignals(True)
+        self._agent_list.clear()
+        chosen = 0
+        for index, agent in enumerate(self._agents):
+            item = QListWidgetItem(
+                f"{agent.get('name') or agent['id']}\n{agent['id']}"
+            )
+            item.setSizeHint(QSize(0, 54))
+            item.setIcon(icons.icon("folder", "#8E8E93", 15))
+            self._agent_list.addItem(item)
+            if select_id and agent["id"] == select_id:
+                chosen = index
+        self._agent_list.blockSignals(False)
+        if self._agents:
+            self._agent_list.setCurrentRow(chosen)
+            self._load_agent(chosen)
+        else:
+            self._current_agent_id = ""
+            self._agent_title.setText("还没有子智能体")
+            self._agent_desc.setText("")
+            self._agent_path.setText("")
+            self._agent_tree.clear()
+            self._open_agent_button.setEnabled(False)
+
+    def _load_agent(self, index: int) -> None:
+        if index < 0 or index >= len(self._agents):
+            return
+        agent = self._agents[index]
+        self._current_agent_id = agent["id"]
+        self._agent_title.setText(agent.get("name") or agent["id"])
+        self._agent_desc.setText(agent.get("description") or "")
+        try:
+            rel = Path(agent["path"]).relative_to(config.DATA_DIR).as_posix()
+        except ValueError:
+            rel = agent["path"]
+        self._agent_path.setText(
+            f"data/{rel}   ·   {'内置' if agent.get('builtin') else '自定义'}   ·   "
+            f"{len(agent.get('tools', []))} 个工具"
+        )
+        self._agent_path.setToolTip(agent["path"])
+        self._agent_tree.clear()
+        root = QTreeWidgetItem([f"{agent['id']}/"])
+        root.setIcon(0, icons.icon("folder", "#0A84FF", 15))
+        font = QFont()
+        font.setWeight(QFont.Weight.DemiBold)
+        root.setFont(0, font)
+        root.setToolTip(0, agent["path"])
+        for category in agent.get("categories", []):
+            files = category.get("files", [])
+            cat_item = QTreeWidgetItem([f"{category['label']}   ·   {category['id']}/   ({len(files)})"])
+            cat_item.setIcon(0, icons.icon(category.get("icon", "folder"), "#8E8E93", 14))
+            cat_item.setToolTip(0, f"{category.get('description', '')}\n{agent['path']}/{category['id']}")
+            for entry in files:
+                child = QTreeWidgetItem([f"{entry['name']}   ·   {self._human_size(entry['size'])}"])
+                child.setIcon(0, icons.icon("file", "#8E8E93", 13))
+                child.setToolTip(0, f"{agent['path']}/{entry['path']}")
+                cat_item.addChild(child)
+            root.addChild(cat_item)
+        self._agent_tree.addTopLevelItem(root)
+        root.setExpanded(True)
+        for i in range(root.childCount()):
+            root.child(i).setExpanded(True)
+        self._open_agent_button.setEnabled(True)
+        self._agent_status.setText("")
+
+    def _add_subagent(self) -> None:
+        name, ok = InputSheet.get_text(
+            self, "新建子智能体", "名称", placeholder="例如 数据分析"
+        )
+        if not ok or not name.strip():
+            return
+        try:
+            agent = subagents.create_agent(name.strip())
+        except Exception as exc:
+            self._agent_status.setText(f"创建失败：{exc}")
+            return
+        self._refresh_agents(agent["id"])
+
+    def _delete_subagent(self) -> None:
+        agent = next((a for a in self._agents if a["id"] == self._current_agent_id), None)
+        if agent is None:
+            return
+        if agent.get("builtin"):
+            self._agent_status.setText("内置子智能体不能删除")
+            return
+        if not ConfirmSheet.ask(
+            self, "删除子智能体", f"确定删除「{agent['name']}」及其目录吗？", "删除"
+        ):
+            return
+        try:
+            subagents.delete_agent(agent["id"])
+        except Exception as exc:
+            self._agent_status.setText(f"删除失败：{exc}")
+            return
+        self._refresh_agents()
+
+    def _open_subagent_dir(self) -> None:
+        agent = next((a for a in self._agents if a["id"] == self._current_agent_id), None)
+        if agent:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(agent["path"]))
 
     def _build_workspace_page(self, public: dict) -> QWidget:
         page, layout = self._page()
@@ -557,7 +723,6 @@ class SettingsDialog(SheetDialog):
         llm: dict = {
             "base_url": self._base_url.text().strip(),
             "model": self._model.text().strip(),
-            "temperature": self._temperature.value() / 10,
         }
         if self._api_key.text().strip():
             llm["api_key"] = self._api_key.text().strip()
