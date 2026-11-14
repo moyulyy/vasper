@@ -125,7 +125,7 @@ BUILTINS: tuple[dict[str, Any], ...] = (
         "id": "viewer-ops",
         "name": "结构视图操作",
         "icon": "atom",
-        "description": "操作左侧 3D 结构视图：视角、选中、测量、结构编辑、晶面/超胞/异质结与固定原子。",
+        "description": "操作左侧 3D 结构视图：打开/关闭/切换结构、格式转换、视角、选中、测量、结构编辑、晶面/超胞/异质结与固定原子。",
         "system_prompt": "你是结构视图操作子智能体。修改结构前说明将改变哪些原子与晶格；删除、晶面切割、超胞和异质结构建前确认参数，操作后报告新的原子数与晶格信息。",
         "skill": "# 结构视图操作技能\n\n"
                  "- 视角：旋转、平移、缩放、重置，不改变结构。\n"
@@ -133,8 +133,18 @@ BUILTINS: tuple[dict[str, Any], ...] = (
                  "- 编辑：增删改原子前先读取结构；所有坐标同时支持分数坐标与笛卡尔坐标。\n"
                  "- 晶面：按 Miller 指数切割表面，设置层数与真空层；超胞需给出 nx/ny/nz。\n"
                  "- 晶格旋转与异质结：保持周期性，异质结需指定两层、晶面、应变与界面间距。\n"
+                 "- 打开/关闭/切换：打开前确认文件存在；关闭前提示未保存的编辑；切换前记录当前结构。\n"
+                 "- 格式转换：支持 CIF、POSCAR、XSD、CAR、XYZ；转换前核对晶胞、元素与坐标，输出到工作区内新文件，避免覆盖源文件。\n"
                  "- 固定原子：用序号/元素/区域选择，固定状态需在视图中可识别。\n",
         "tools": [
+            _TOOL("structure_open", "打开结构文件并显示在 3D 视图", {"path": {"type": "string", "description": "工作区内的结构文件相对路径"}}, ["path"]),
+            _TOOL("structure_close", "关闭当前 3D 结构"),
+            _TOOL("structure_switch", "切换当前打开的结构文件", {"path": {"type": "string"}}, ["path"]),
+            _TOOL("structure_convert", "转换结构文件格式", {
+                "source": {"type": "string", "description": "源结构文件相对路径"},
+                "target_format": {"type": "string", "enum": ["cif", "poscar", "xsd", "car", "xyz"]},
+                "output": {"type": "string", "description": "输出文件相对路径"},
+            }, ["source", "target_format", "output"]),
             _TOOL("view_rotate", "旋转 3D 视角", {"axis": {"type": "string", "enum": ["x", "y", "z"]}, "angle": {"type": "number"}}, ["axis", "angle"]),
             _TOOL("view_pan", "平移 3D 视图", {"dx": {"type": "number"}, "dy": {"type": "number"}}, ["dx", "dy"]),
             _TOOL("view_zoom", "缩放 3D 视图", {"factor": {"type": "number", "description": "大于 1 放大，小于 1 缩小"}}, ["factor"]),
