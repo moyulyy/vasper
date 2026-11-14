@@ -121,6 +121,38 @@ BUILTINS: tuple[dict[str, Any], ...] = (
             _TOOL("slurm_logs", "读取作业日志", {"node": {"type": "string"}, "path": {"type": "string"}}, ["node", "path"]),
         ],
     },
+    {
+        "id": "viewer-ops",
+        "name": "结构视图操作",
+        "icon": "atom",
+        "description": "操作左侧 3D 结构视图：视角、选中、测量、结构编辑、晶面/超胞/异质结与固定原子。",
+        "system_prompt": "你是结构视图操作子智能体。修改结构前说明将改变哪些原子与晶格；删除、晶面切割、超胞和异质结构建前确认参数，操作后报告新的原子数与晶格信息。",
+        "skill": "# 结构视图操作技能\n\n"
+                 "- 视角：旋转、平移、缩放、重置，不改变结构。\n"
+                 "- 选中与测量：按原子序号/元素定位，选中后显示坐标与距离。\n"
+                 "- 编辑：增删改原子前先读取结构；所有坐标同时支持分数坐标与笛卡尔坐标。\n"
+                 "- 晶面：按 Miller 指数切割表面，设置层数与真空层；超胞需给出 nx/ny/nz。\n"
+                 "- 晶格旋转与异质结：保持周期性，异质结需指定两层、晶面、应变与界面间距。\n"
+                 "- 固定原子：用序号/元素/区域选择，固定状态需在视图中可识别。\n",
+        "tools": [
+            _TOOL("view_rotate", "旋转 3D 视角", {"axis": {"type": "string", "enum": ["x", "y", "z"]}, "angle": {"type": "number"}}, ["axis", "angle"]),
+            _TOOL("view_pan", "平移 3D 视图", {"dx": {"type": "number"}, "dy": {"type": "number"}}, ["dx", "dy"]),
+            _TOOL("view_zoom", "缩放 3D 视图", {"factor": {"type": "number", "description": "大于 1 放大，小于 1 缩小"}}, ["factor"]),
+            _TOOL("view_reset", "重置 3D 视角"),
+            _TOOL("select_atom", "选中指定原子", {"index": {"type": "integer"}, "element": {"type": "string"}}, []),
+            _TOOL("inspect_atom", "查看原子元素、序号、坐标与配位", {"index": {"type": "integer"}}, ["index"]),
+            _TOOL("measure_distance", "测量两个原子的距离", {"atom_a": {"type": "integer"}, "atom_b": {"type": "integer"}}, ["atom_a", "atom_b"]),
+            _TOOL("add_atom", "在结构中增加原子", {"element": {"type": "string"}, "x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}}, ["element", "x", "y", "z"]),
+            _TOOL("modify_atom", "修改原子的元素或坐标", {"index": {"type": "integer"}, "element": {"type": "string"}, "x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}}, ["index"]),
+            _TOOL("delete_atom", "删除指定原子", {"index": {"type": "integer"}}, ["index"]),
+            _TOOL("cut_surface", "按 Miller 指数切割晶面", {"h": {"type": "integer"}, "k": {"type": "integer"}, "l": {"type": "integer"}, "layers": {"type": "integer"}, "vacuum": {"type": "number"}}, ["h", "k", "l"]),
+            _TOOL("build_supercell", "构建超胞", {"nx": {"type": "integer"}, "ny": {"type": "integer"}, "nz": {"type": "integer"}}, ["nx", "ny", "nz"]),
+            _TOOL("rotate_lattice", "旋转晶格矢量", {"axis": {"type": "string", "enum": ["x", "y", "z"]}, "angle": {"type": "number"}}, ["axis", "angle"]),
+            _TOOL("build_heterojunction", "搭建两层异质结", {"layer_a": {"type": "string"}, "layer_b": {"type": "string"}, "miller": {"type": "string"}, "strain": {"type": "number"}, "gap": {"type": "number"}}, ["layer_a", "layer_b"]),
+            _TOOL("fix_atoms", "固定指定原子", {"indices": {"type": "array", "items": {"type": "integer"}}, "mode": {"type": "string"}}, ["indices"]),
+        ],
+    },
+
 )
 
 
